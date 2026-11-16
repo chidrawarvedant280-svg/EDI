@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Motor Condition Monitoring System — 3D Interactive Prototype (EDI-1 Group 5)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: #090d16;
+      color: #e2e8f0;
+      margin: 0;
+      overflow-x: hidden;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: #1e293b;
+      height: 6px;
+      border-radius: 9999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #14b8a6;
+      cursor: pointer;
+      border: 2px solid #0f172a;
+      box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.3);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+    .pulse-fast { animation: pulseGlow 0.7s infinite ease-in-out; }
+    #viewport3d { touch-action: none; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#090d16] text-slate-200">
+
+  <!-- Top Navigation / Header -->
+  <header class="border-b border-slate-800/80 bg-[#0d1321]/95 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-[1600px] mx-auto px-3 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-lg bg-teal-500/15 border border-teal-500/40 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-sm sm:text-base font-bold text-white truncate">Motor Condition Monitoring Twin</h1>
+            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-teal-300 border border-slate-700">VIT Pune · ME-F Group 5</span>
+          </div>
+          <p class="text-[11px] text-slate-400 truncate">Low-Cost Vibration &amp; Thermal Analysis · Interactive 3D &amp; Telemetry Prototype</p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher: Current Bench vs Highest Potential -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800" role="group" aria-label="Prototype Mode">
+          <button id="btnModeCurrent" type="button" class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-teal-600 text-white shadow">
+            Bench Prototype (Current)
+          </button>
+          <button id="btnModePotential" type="button" class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-400 hover:text-white flex items-center gap-1.5">
+            <span>Highest Potential</span>
+            <span class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] border border-amber-500/30">Industry 4.0</span>
+          </button>
+        </div>
+
+        <button id="btnBuzzerToggle" type="button" title="Toggle Alert Buzzer Audio" class="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-medium text-slate-300 flex items-center gap-1.5 transition-colors">
+          <svg id="iconBuzzerOff" class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          </svg>
+          <svg id="iconBuzzerOn" class="w-4 h-4 text-amber-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          </svg>
+          <span class="hidden sm:inline">Buzzer</span>
+        </button>
+
+        <button id="btnExportCsv" type="button" class="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-teal-500/50 text-xs font-medium text-teal-300 flex items-center gap-1.5 transition-colors">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>Export CSV</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- LEFT/CENTER: 3D Interactive Twin + Controls (7 cols on lg) -->
+    <section class="lg:col-span-7 flex flex-col gap-4 min-w-0">
+
+      <!-- 3D Viewport Card -->
+      <div class="relative rounded-xl border border-slate-800 bg-[#0c1220] overflow-hidden shadow-2xl flex flex-col">
+        <!-- Viewport Top Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-slate-800/80 bg-[#0f172a]/70">
+          <div class="flex items-center gap-2.5">
+            <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></span>
+            <span id="statusBadgeText" class="text-xs font-semibold tracking-wide uppercase text-emerald-300">NORMAL OPERATION</span>
+            <span class="text-xs text-slate-500 hidden sm:inline">|</span>
+            <span id="modeSubtitle" class="text-xs text-slate-400 hidden sm:inline">12V DC Test Rig · Local OLED &amp; LED Thresholds</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btnExplode" type="button" class="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors">
+              Exploded View
+            </button>
+            <button id="btnResetCam" type="button" class="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors">
+              Reset Camera
+            </button>
+          </div>
+        </div>
+
+        <!-- 3D Canvas Container -->
+        <div class="relative w-full h-[360px] sm:h-[440px] bg-gradient-to-b from-[#0b1120] to-[#060911]">
+          <div id="viewport3d" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+          <!-- Floating Interaction Hint -->
+          <div class="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-950/75 border border-slate-800/80 text-[11px] text-slate-400 backdrop-blur-sm">
+            <span>Drag to orbit · Scroll to zoom · Click any component to inspect</span>
+          </div>
+
+          <!-- Floating Relay / Protection Banner (Highest Potential Mode) -->
+          <div id="relayBanner" class="hidden absolute top-3 left-3 right-3 sm:right-auto sm:max-w-sm px-3 py-2 rounded-lg bg-red-950/90 border border-red-500/60 text-xs text-red-100 flex items-center justify-between gap-3 backdrop-blur-md shadow-lg">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-red-400 pulse-fast"></span>
+              <span id="relayBannerText">Auto-Protection Relay Tripped: Motor Cut Off</span>
+            </div>
+            <button id="btnResetRelay" type="button" class="px-2 py-0.5 rounded bg-red-600 hover:bg-red-500 text-white font-semibold text-[11px] shrink-0">Reset</button>
+          </div>
+
+          <!-- Floating Component Inspector Card -->
+          <div id="inspectorCard" class="hidden absolute top-3 right-3 w-64 sm:w-72 rounded-xl bg-slate-950/90 border border-teal-500/40 p-3.5 backdrop-blur-md shadow-2xl z-10">
+            <div class="flex items-start justify-between gap-2 mb-1.5">
+              <div>
+                <span id="inspCategory" class="text-[10px] uppercase tracking-wider font-semibold text-teal-400">Sensor Module</span>
+                <h3 id="inspTitle" class="text-sm font-bold text-white leading-tight">MPU6050 Accelerometer</h3>
+              </div>
+              <button id="btnCloseInspector" type="button" class="text-slate-400 hover:text-white p-0.5" aria-label="Close inspector">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p id="inspDesc" class="text-xs text-slate-300 leading-relaxed mb-2.5"></p>
+            <div class="rounded-lg bg-slate-900/90 border border-slate-800 p-2 mb-2">
+              <div class="text-[10px] text-slate-400 uppercase font-semibold">Live Reading</div>
+              <div id="inspLive" class="text-xs mono text-teal-300 font-semibold mt-0.5">—</div>
+            </div>
+            <div id="inspPotentialBox" class="rounded-lg bg-amber-500/10 border border-amber-500/30 p-2">
+              <div class="text-[10px] text-amber-300 uppercase font-semibold">Highest Potential Upgrade</div>
+              <div id="inspPotential" class="text-[11px] text-amber-100/90 mt-0.5 leading-snug"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Component Pills Bar -->
+        <div class="px-3 py-2 border-t border-slate-800/80 bg-[#0b101d] flex items-center gap-1.5 overflow-x-auto">
+          <span class="text-[11px] text-slate-500 font-medium shrink-0 mr-1">Inspect:</span>
+          <button type="button" data-part="motor" class="part-pill px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition-colors">12V DC Motor</button>
+          <button type="button" data-part="coupling" class="part-pill px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition-colors">Shaft &amp; Coupling</button>
+          <button type="button" data-part="load" class="part-pill px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition-colors">Servo Load Rig</button>
+          <button type="button" data-part="accel" class="part-pill px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition-colors">MPU6050 / ADXL345</button>
+          <button type="button" data-part="temp" class="part-pill px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition-colors">DS18B20 Temp</button>
+          <button type="button" data-part="esp32" class="part-pill px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition-colors">ESP32 MCU</button>
+          <button type="button" data-part="oled" class="part-pill px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 shrink-0 transition-colors">OLED &amp; LEDs</button>
+        </div>
+      </div>
+
+      <!-- Interactive Fault & Operating Controls Card -->
+      <div class="rounded-xl border border-slate-800 bg-[#0d1321] p-4 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h2 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            Operating Condition &amp; Fault Injection
+          </h2>
+          <div id="potentialControlsWrap" class="hidden flex items-center gap-3">
+            <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-amber-300 font-medium">
+              <input id="chkAutoProtect" type="checkbox" checked class="rounded border-slate-700 bg-slate-900 text-teal-500 focus:ring-teal-500" />
+              <span>Auto-Cutoff Relay</span>
+            </label>
+            <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-cyan-300 font-medium">
+              <input id="chkActiveCooling" type="checkbox" checked class="rounded border-slate-700 bg-slate-900 text-teal-500 focus:ring-teal-500" />
+              <span>Smart Cooling Fan</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Scenario Preset Buttons -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+          <button type="button" data-fault="normal" class="fault-btn px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-teal-600/20 border-teal-500 text-teal-300">
+            Normal Baseline
+          </button>
+          <button type="button" data-fault="imbalance" class="fault-btn px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700">
+            Rotor Imbalance
+          </button>
+          <button type="button" data-fault="misalignment" class="fault-btn px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700">
+            Misalignment
+          </button>
+          <button type="button" data-fault="bearing" class="fault-btn px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700">
+            Bearing Wear
+          </button>
+          <button type="button" data-fault="thermal" class="fault-btn col-span-2 sm:col-span-1 px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700">
+            Thermal Overload
+          </button>
+        </div>
+
+        <!-- Sliders -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-slate-900/70 rounded-lg p-3 border border-slate-800/80">
+            <div class="flex justify-between items-center mb-1.5">
+              <label for="sliderRpm" class="text-xs font-medium text-slate-300">Motor Speed</label>
+              <span id="valRpm" class="text-xs mono font-bold text-teal-400">1,500 RPM</span>
+            </div>
+            <input id="sliderRpm" type="range" min="0" max="3000" step="50" value="1500" class="w-full" />
+            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+              <span>0 RPM</span>
+              <span>1X: <span id="valFreq1x" class="mono text-slate-400">25.0 Hz</span></span>
+              <span>3000</span>
+            </div>
+          </div>
+
+          <div class="bg-slate-900/70 rounded-lg p-3 border border-slate-800/80">
+            <div class="flex justify-between items-center mb-1.5">
+              <label for="sliderLoad" class="text-xs font-medium text-slate-300">Servo Torque Load</label>
+              <span id="valLoad" class="text-xs mono font-bold text-cyan-400">35%</span>
+            </div>
+            <input id="sliderLoad" type="range" min="0" max="100" step="5" value="35" class="w-full" />
+            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+              <span>No Load</span>
+              <span>Rated</span>
+              <span>Peak</span>
+            </div>
+          </div>
+
+          <div class="bg-slate-900/70 rounded-lg p-3 border border-slate-800/80">
+            <div class="flex justify-between items-center mb-1.5">
+              <label for="sliderAmbient" class="text-xs font-medium text-slate-300">Ambient Temp</label>
+              <span id="valAmbient" class="text-xs mono font-bold text-amber-400">28°C</span>
+            </div>
+            <input id="sliderAmbient" type="range" min="15" max="50" step="1" value="28" class="w-full" />
+            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+              <span>15°C</span>
+              <span>Pune Avg</span>
+              <span>50°C</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Live Telemetry, FFT Diagnostics & Potential Roadmap (5 cols on lg) -->
+    <section class="lg:col-span-5 flex flex-col gap-4 min-w-0">
+
+      <!-- KPI Metric Strip -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-2.5">
+        <div class="rounded-xl border border-slate-800 bg-[#0d1321] p-3">
+          <div class="text-[11px] text-slate-400 font-medium">Vibration RMS</div>
+          <div id="kpiVib" class="text-lg font-bold mono text-white mt-0.5">1.42 <span class="text-xs font-normal text-slate-400">mm/s</span></div>
+          <div id="kpiVibSub" class="text-[10px] text-emerald-400 mt-0.5">ISO Zone A (Good)</div>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-[#0d1321] p-3">
+          <div class="text-[11px] text-slate-400 font-medium">Stator Temp</div>
+          <div id="kpiTemp" class="text-lg font-bold mono text-white mt-0.5">36.4 <span class="text-xs font-normal text-slate-400">°C</span></div>
+          <div id="kpiTempSub" class="text-[10px] text-emerald-400 mt-0.5">Limit: 65.0°C</div>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-[#0d1321] p-3">
+          <div class="text-[11px] text-slate-400 font-medium">Peak Accel</div>
+          <div id="kpiPeakG" class="text-lg font-bold mono text-white mt-0.5">0.28 <span class="text-xs font-normal text-slate-400">g</span></div>
+          <div id="kpiPeakSub" class="text-[10px] text-slate-400 mt-0.5">3-Axis Vector</div>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-[#0d1321] p-3">
+          <div id="kpiFourthLabel" class="text-[11px] text-slate-400 font-medium">Threshold State</div>
+          <div id="kpiFourthVal" class="text-lg font-bold mono text-emerald-400 mt-0.5">OK</div>
+          <div id="kpiFourthSub" class="text-[10px] text-slate-400 mt-0.5">Green LED Active</div>
+        </div>
+      </div>
+
+      <!-- Tabbed Analytics Panel -->
+      <div class="flex-1 rounded-xl border border-slate-800 bg-[#0d1321] flex flex-col overflow-hidden shadow-lg">
+        <!-- Tabs -->
+        <div class="flex border-b border-slate-800 bg-[#0a0f1c] px-2 pt-2 gap-1 overflow-x-auto">
+          <button type="button" data-tab="telemetry" class="panel-tab px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-teal-400 text-white bg-[#0d1321] shrink-0">
+            Live Telemetry
+          </button>
+          <button type="button" data-tab="fft" class="panel-tab px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-slate-200 shrink-0 flex items-center gap-1.5">
+            <span>FFT &amp; AI Diagnostics</span>
+            <span class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] border border-amber-500/30">Potential</span>
+          </button>
+          <button type="button" data-tab="roadmap" class="panel-tab px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-slate-200 shrink-0">
+            Current vs. Potential
+          </button>
+        </div>
+
+        <!-- TAB 1: Live Telemetry -->
+        <div id="tab-telemetry" class="tab-content p-4 flex flex-col gap-4 flex-1">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-200">3-Axis Vibration Waveform (MPU6050 / ADXL345)</span>
+              <span class="text-[11px] mono text-slate-400">100 Hz Sample</span>
+            </div>
+            <div class="relative h-44 bg-slate-950/60 rounded-lg border border-slate-800/80 p-2">
+              <canvas id="chartVib"></canvas>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-200">Motor Surface Thermal Trend (DS18B20)</span>
+              <span class="text-[11px] mono text-amber-400">Warn: 55°C · Crit: 65°C</span>
+            </div>
+            <div class="relative h-40 bg-slate-950/60 rounded-lg border border-slate-800/80 p-2">
+              <canvas id="chartTemp"></canvas>
+            </div>
+          </div>
+
+          <!-- Hardware Alert LEDs Mirror -->
+          <div class="rounded-lg bg-slate-900/70 border border-slate-800 p-3 flex flex-wrap items-center justify-between gap-2">
+            <span class="text-xs font-medium text-slate-300">Physical Breadboard LEDs:</span>
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-1.5">
+                <span id="ledGreen" class="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]"></span>
+                <span class="text-[11px] text-slate-300">Normal</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span id="ledBlue" class="w-3 h-3 rounded-full bg-slate-700"></span>
+                <span class="text-[11px] text-slate-400">IoT Sync</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span id="ledYellow" class="w-3 h-3 rounded-full bg-slate-700"></span>
+                <span class="text-[11px] text-slate-400">Warning</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span id="ledRed" class="w-3 h-3 rounded-full bg-slate-700"></span>
+                <span class="text-[11px] text-slate-400">Critical</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: FFT & AI Diagnostics -->
+        <div id="tab-fft" class="tab-content hidden p-4 flex flex-col gap-4 flex-1">
+          <div id="fftLockNotice" class="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 flex items-center justify-between gap-3">
+            <div class="text-xs text-amber-200">
+              <strong class="font-semibold">Bench Mode Active:</strong> Current prototype only checks scalar thresholds. Switch to <strong>Highest Potential</strong> to unlock Edge FFT &amp; Fault Classification.
+            </div>
+            <button id="btnUnlockPotential" type="button" class="px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shrink-0">
+              Enable
+            </button>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-slate-200">Edge FFT Frequency Spectrum (0 – 200 Hz)</span>
+              <span id="fftPeakLabel" class="text-[11px] mono text-cyan-400">1X Peak: 25.0 Hz</span>
+            </div>
+            <div class="relative h-48 bg-slate-950/60 rounded-lg border border-slate-800/80 p-2">
+              <canvas id="chartFft"></canvas>
+            </div>
+          </div>
+
+          <!-- Diagnostic Inference Card -->
+          <div class="rounded-lg bg-slate-900/80 border border-slate-800 p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-white">Edge TinyML Fault Signature</span>
+              <span id="diagConfidence" class="text-xs mono font-bold text-emerald-400">98.2% Healthy</span>
+            </div>
+            <p id="diagSummary" class="text-xs text-slate-300 leading-relaxed">
+              Spectrum shows low-amplitude fundamental (1X) peak with negligible harmonics. Bearing and thermal profile within nominal ISO 10816-3 Zone A.
+            </p>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <div class="rounded bg-slate-950/70 p-2 border border-slate-800/80">
+                <div class="text-[10px] text-slate-400">Est. Remaining Useful Life</div>
+                <div id="diagRul" class="text-sm font-bold mono text-teal-300">2,400+ hrs</div>
+              </div>
+              <div class="rounded bg-slate-950/70 p-2 border border-slate-800/80">
+                <div class="text-[10px] text-slate-400">Recommended Action</div>
+                <div id="diagAction" class="text-xs font-semibold text-slate-200 mt-0.5">Continue Routine Run</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: Current vs Highest Potential -->
+        <div id="tab-roadmap" class="tab-content hidden p-4 flex flex-col gap-3 flex-1 overflow-y-auto max-h-[540px]">
+          <div class="rounded-lg bg-gradient-to-r from-teal-500/10 to-amber-500/10 border border-slate-700/70 p-3">
+            <h3 class="text-xs font-bold text-white mb-1">From ₹1,500 Bench Prototype → Industry 4.0 Predictive Twin</h3>
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              Our mid-semester prototype validates low-cost dual-parameter sensing. At its highest potential, the exact same ESP32 + MEMS hardware scales into an autonomous predictive maintenance node without expensive industrial PLCs.
+            </p>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-slate-800 text-slate-400">
+                  <th class="py-2 pr-2 font-semibold">Capability</th>
+                  <th class="py-2 px-2 font-semibold text-teal-300">Current (Mid-Sem)</th>
+                  <th class="py-2 pl-2 font-semibold text-amber-300">Highest Potential</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/70 text-[11px]">
+                <tr>
+                  <td class="py-2 pr-2 font-medium text-slate-200">Diagnostics</td>
+                  <td class="py-2 px-2 text-slate-400">Threshold breach alert only</td>
+                  <td class="py-2 pl-2 text-slate-200">On-chip FFT + TinyML fault ID (Imbalance, Misalignment, Bearing)</td>
+                </tr>
+                <tr>
+                  <td class="py-2 pr-2 font-medium text-slate-200">Connectivity</td>
+                  <td class="py-2 px-2 text-slate-400">USB Serial Plotter &amp; Excel CSV</td>
+                  <td class="py-2 pl-2 text-slate-200">ESP32 Wi-Fi / MQTT cloud dashboard &amp; mobile push alerts</td>
+                </tr>
+                <tr>
+                  <td class="py-2 pr-2 font-medium text-slate-200">Control Action</td>
+                  <td class="py-2 px-2 text-slate-400">Passive OLED &amp; LED warnings</td>
+                  <td class="py-2 pl-2 text-slate-200">Auto-cutoff MOSFET/Relay &amp; PWM cooling fan actuation</td>
+                </tr>
+                <tr>
+                  <td class="py-2 pr-2 font-medium text-slate-200">Standards</td>
+                  <td class="py-2 px-2 text-slate-400">Empirical bench baseline</td>
+                  <td class="py-2 pl-2 text-slate-200">ISO 10816-3 / 20816-3 RMS velocity severity zones</td>
+                </tr>
+                <tr>
+                  <td class="py-2 pr-2 font-medium text-slate-200">Scalability</td>
+                  <td class="py-2 px-2 text-slate-400">Single 12V DC test motor</td>
+                  <td class="py-2 pl-2 text-slate-200">Multi-motor factory fleet + Remaining Useful Life (RUL)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="rounded-lg bg-slate-900/70 border border-slate-800 p-3 text-[11px] text-slate-400">
+            <span class="font-semibold text-slate-200">Project Team (VIT Pune · DESH):</span> Vedant Shirtode, Vedant Paraskar, Vedant Chidrawar, Vedant Desale · Guide: Prof. Jyoti Kulkarni
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toast" class="fixed bottom-4 right-4 z-50 hidden px-4 py-2.5 rounded-lg bg-slate-900 border border-teal-500/50 text-xs font-medium text-white shadow-xl"></div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // =========================================================================
+    // 1. APPLICATION STATE
+    // =========================================================================
+    const state = {
+      mode: 'current', // 'current' | 'potential'
+      fault: 'normal', // 'normal' | 'imbalance' | 'misalignment' | 'bearing' | 'thermal'
+      rpm: 1500,
+      load: 35,
+      ambient: 28,
+      exploded: false,
+      autoProtect: true,
+      activeCooling: true,
+      relayTripped: false,
+      criticalTimer: 0,
+      buzzerEnabled: false,
+      selectedPart: null,
+      // Live simulated metrics
+      vibRms: 1.42,
+      peakG: 0.28,
+      temp: 36.4,
+      healthScore: 98,
+      status: 'NORMAL', // 'NORMAL' | 'WARNING' | 'CRITICAL'
+      shaftAngle: 0,
+      simTime: 0,
+      csvLog: [],
+    };
+
+    const FAULT_PROFILES = {
+      normal: {
+        label: 'Normal Baseline',
+        vibMult: 1.0,
+        h1: 1.0, h2: 0.18, h3: 0.08, noise: 0.12,
+        tempRise: 8.5,
+        diag: 'Spectrum shows low-amplitude fundamental (1X) peak with negligible harmonics. Bearing and thermal profile within nominal ISO 10816-3 Zone A.',
+        action: 'Continue Routine Run',
+        rulBase: 2400,
+      },
+      imbalance: {
+        label: 'Rotor Imbalance',
+        vibMult: 3.4,
+        h1: 4.8, h2: 0.45, h3: 0.15, noise: 0.25,
+        tempRise: 14.0,
+        diag: 'Dominant 1X synchronous radial peak detected at shaft rotational frequency. Classic signature of eccentric rotor mass or loose coupling.',
+        action: 'Balance Rotor / Check Coupling',
+        rulBase: 420,
+      },
+      misalignment: {
+        label: 'Shaft Misalignment',
+        vibMult: 3.1,
+        h1: 1.8, h2: 4.2, h3: 1.4, noise: 0.3,
+        tempRise: 18.0,
+        diag: 'Elevated 2X and 3X harmonics relative to 1X fundamental. Indicates angular or parallel shaft misalignment across the jaw coupling.',
+        action: 'Realign Motor & Pillow Blocks',
+        rulBase: 310,
+      },
+      bearing: {
+        label: 'Bearing Wear',
+        vibMult: 2.8,
+        h1: 1.1, h2: 1.3, h3: 2.2, noise: 2.4,
+        tempRise: 24.5,
+        diag: 'High-frequency broadband vibration floor with non-synchronous peaks and rising friction heat. Early-stage bearing raceway pitting.',
+        action: 'Lubricate / Replace Bearing',
+        rulBase: 160,
+      },
+      thermal: {
+        label: 'Thermal Overload',
+        vibMult: 1.9,
+        h1: 1.5, h2: 0.8, h3: 0.4, noise: 0.45,
+        tempRise: 41.0,
+        diag: 'Stator surface temperature climbing rapidly past 65°C critical threshold under sustained torque load. Risk of winding insulation degradation.',
+        action: 'Reduce Load & Activate Cooling',
+        rulBase: 95,
+      },
+    };
+
+    const PART_INFO = {
+      motor: {
+        category: 'Actuator / Test Unit',
+        title: '12V DC Test Motor',
+        desc: 'Compact low-voltage brushed DC motor mounted on the left aluminum pillar, driving the test shaft safely on the bench.',
+        potential: 'Scale monitoring thresholds to 3-phase AC industrial induction motors using non-invasive clamp current + triaxial MEMS nodes.',
+        getLive: () => `${state.relayTripped ? 0 : state.rpm} RPM · ${state.load}% Torque`,
+      },
+      coupling: {
+        category: 'Mechanical Transmission',
+        title: 'Flexible Jaw Coupling & Shaft',
+        desc: 'Connects the 12V motor shaft to the rotating steel test shaft across precision-machined aluminum bearing supports.',
+        potential: '2X harmonic FFT tracking detects angular/parallel coupling misalignment before elastomer spider wear.',
+        getLive: () => `1X Freq: ${((state.relayTripped ? 0 : state.rpm) / 60).toFixed(1)} Hz`,
+      },
+      load: {
+        category: 'Dynamic Load Rig',
+        title: 'Central Servo Load Mechanism',
+        desc: 'Mounted at mid-span on the aluminum baseplate to apply controlled mechanical resistance and repeatable load tests.',
+        potential: 'Automated closed-loop load sweep profiles for standardized ISO 10816-3 acceptance testing.',
+        getLive: () => `Applied Load: ${state.load}% · Fault: ${FAULT_PROFILES[state.fault].label}`,
+      },
+      accel: {
+        category: 'Vibration Sensor',
+        title: 'MPU6050 / ADXL345 (3-Axis)',
+        desc: 'MEMS accelerometer mounted on the motor bearing block capturing real-time X, Y, Z acceleration over I2C.',
+        potential: 'High-rate DMA sampling (1.6–3.2 kHz) enabling on-chip Fast Fourier Transform (FFT) spectral fault isolation.',
+        getLive: () => `RMS: ${state.vibRms.toFixed(2)} mm/s · Peak: ${state.peakG.toFixed(2)} g`,
+      },
+      temp: {
+        category: 'Thermal Sensor',
+        title: 'DS18B20 / LM35 Thermal Probe',
+        desc: 'Contact temperature sensor affixed to the motor housing to track stator heat buildup during continuous runs.',
+        potential: 'Dual-point thermal gradient (stator vs ambient) + automated PWM cooling fan & MOSFET cutoff relay.',
+        getLive: () => `Surface: ${state.temp.toFixed(1)}°C (Ambient ${state.ambient}°C)`,
+      },
+      esp32: {
+        category: 'Edge Controller',
+        title: 'ESP32 / NodeMCU MCU',
+        desc: 'Dual-core microcontroller polling I2C/1-Wire sensors, evaluating threshold limits, and driving local alerts.',
+        potential: 'Runs TinyML anomaly scoring, MQTT/Wi-Fi cloud telemetry, and autonomous safety relay control.',
+        getLive: () => state.mode === 'potential' ? 'Wi-Fi MQTT + Edge FFT Active' : 'Local Serial & Threshold Loop',
+      },
+      oled: {
+        category: 'Local HMI & Alerts',
+        title: 'SSD1306 OLED & 4-LED Array',
+        desc: 'Displays live RPM, vibration, and temperature locally alongside Green (OK), Blue (Sync), Yellow (Warn), and Red (Crit) LEDs.',
+        potential: 'Synchronized with cloud mobile alerts, digital twin dashboard, and automated buzzer/relay interlocks.',
+        getLive: () => `Status: ${state.status} · Health: ${state.healthScore}%`,
+      },
+    };
+
+    // =========================================================================
+    // 2. AUDIO BUZZER (WEB AUDIO API)
+    // =========================================================================
+    let audioCtx = null;
+    let lastBeepTime = 0;
+    function playBuzzerBeep(freq = 880, duration = 0.09) {
+      if (!state.buzzerEnabled) return;
+      const now = performance.now();
+      if (now - lastBeepTime < 650) return;
+      lastBeepTime = now;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) { /* ignore audio errors */ }
+    }
+
+    // =========================================================================
+    // 3. THREE.JS 3D MOTOR TEST RIG SCENE
+    // =========================================================================
+    const container = document.getElementById('viewport3d');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x070b14);
+    scene.fog = new THREE.FogExp2(0x070b14, 0.045);
+
+    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xcbd5e1, 0.65);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+    keyLight.position.set(6, 10, 7);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 1024;
+    keyLight.shadow.mapSize.height = 1024;
+    scene.add(keyLight);
+
+    const rimLight = new THREE.DirectionalLight(0x14b8a6, 0.55);
+    rimLight.position.set(-7, 4, -5);
+    scene.add(rimLight);
+
+    // Subtle Grid Floor
+    const grid = new THREE.GridHelper(24, 24, 0x1e293b, 0x0f172a);
+    grid.position.y = -0.35;
+    scene.add(grid);
+
+    // Materials
+    const matAluminum = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.72, roughness: 0.32 });
+    const matDarkAlum = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.65, roughness: 0.4 });
+    const matSteel = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.88, roughness: 0.18 });
+    const matMotorBody = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.75, roughness: 0.35, emissive: 0x000000 });
+    const matOrange = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.45 });
+    const matPcbBlue = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5, metalness: 0.2 });
+    const matPcbDark = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.6, metalness: 0.2 });
+    const matBreadboard = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.7 });
+    const matServoRed = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.45 });
+    const matCopper = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.85, roughness: 0.25 });
+
+    // Rig Root Group
+    const rigGroup = new THREE.Group();
+    scene.add(rigGroup);
+
+    // Store clickable groups & exploded offsets
+    const clickableObjects = [];
+    const partGroups = {};
+    const explodeTargets = [];
+
+    function registerPart(partId, meshOrGroup, explodeVec) {
+      partGroups[partId] = meshOrGroup;
+      meshOrGroup.userData.partId = partId;
+      meshOrGroup.traverse((child) => {
+        if (child.isMesh) {
+          child.userData.partId = partId;
+          child.castShadow = true;
+          child.receiveShadow = true;
+          clickableObjects.push(child);
+        }
+      });
+      if (explodeVec) {
+        explodeTargets.push({
+          obj: meshOrGroup,
+          base: meshOrGroup.position.clone(),
+          offset: explodeVec,
+        });
+      }
+    }
+
+    // 1. Aluminum Baseplate (from Slide 2)
+    const basePlate = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.28, 3.0), matAluminum);
+    basePlate.position.set(0, -0.14, 0);
+    basePlate.receiveShadow = true;
+    rigGroup.add(basePlate);
+
+    // 3 Vertical Aluminum Bearing Pillars
+    const pillarPositions = [-2.2, -0.6, 1.8];
+    pillarPositions.forEach((px) => {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.85, 1.5), matAluminum);
+      pillar.position.set(px, 0.92, -0.2);
+      pillar.castShadow = true;
+      pillar.receiveShadow = true;
+      rigGroup.add(pillar);
+    });
+
+    // 2. 12V DC Motor (Left end)
+    const motorGroup = new THREE.Group();
+    motorGroup.position.set(-2.95, 1.35, -0.2);
+    const motorCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 1.25, 28), matMotorBody);
+    motorCyl.rotation.z = Math.PI / 2;
+    motorGroup.add(motorCyl);
+    const motorCap = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 0.16, 28), matDarkAlum);
+    motorCap.rotation.z = Math.PI / 2;
+    motorCap.position.x = -0.68;
+    motorGroup.add(motorCap);
+    // Potential Mode: Cooling Fan Ring on motor back
+    const coolingFanGroup = new THREE.Group();
+    coolingFanGroup.position.set(-0.82, 0, 0);
+    const fanShroud = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.14, 24, 1, true), new THREE.MeshStandardMaterial({ color: 0x0ea5e9, side: THREE.DoubleSide, metalness: 0.5, roughness: 0.3 }));
+    fanShroud.rotation.z = Math.PI / 2;
+    coolingFanGroup.add(fanShroud);
+    const fanBlades = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.36, 0.1), new THREE.MeshStandardMaterial({ color: 0x38bdf8 }));
+      blade.rotation.x = (i * Math.PI) / 3;
+      fanBlades.add(blade);
+    }
+    coolingFanGroup.add(fanBlades);
+    coolingFanGroup.visible = false;
+    motorGroup.add(coolingFanGroup);
+
+    rigGroup.add(motorGroup);
+    registerPart('motor', motorGroup, new THREE.Vector3(-0.7, 0.25, 0));
+
+    // 3. Rotating Shaft & Jaw Coupling
+    const shaftGroup = new THREE.Group();
+    shaftGroup.position.set(0, 1.35, -0.2);
+
+    const shaftMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 4.6, 20), matSteel);
+    shaftMesh.rotation.z = Math.PI / 2;
+    shaftMesh.position.x = 0.05;
+    shaftGroup.add(shaftMesh);
+
+    // Flexible Jaw Coupling with Orange Spider
+    const couplingLeft = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.22, 20), matAluminum);
+    couplingLeft.rotation.z = Math.PI / 2;
+    couplingLeft.position.x = -1.65;
+    shaftGroup.add(couplingLeft);
+
+    const couplingSpider = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.12, 16), matOrange);
+    couplingSpider.rotation.z = Math.PI / 2;
+    couplingSpider.position.x = -1.48;
+    shaftGroup.add(couplingSpider);
+
+    const couplingRight = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.22, 20), matAluminum);
+    couplingRight.rotation.z = Math.PI / 2;
+    couplingRight.position.x = -1.31;
+    shaftGroup.add(couplingRight);
+
+    // Eccentric Disc / Rotor Indicator so rotation is clearly visible
+    const rotorDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.12, 24), matDarkAlum);
+    rotorDisc.rotation.z = Math.PI / 2;
+    rotorDisc.position.x = 0.7;
+    shaftGroup.add(rotorDisc);
+    const rotorMarker = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.12), matOrange);
+    rotorMarker.position.set(0.7, 0.25, 0);
+    shaftGroup.add(rotorMarker);
+
+    rigGroup.add(shaftGroup);
+    registerPart('coupling', shaftGroup, new THREE.Vector3(0, 0.65, 0));
+
+    // 4. Central Servo Load Mechanism (matching Slide 2 red/black servo)
+    const loadGroup = new THREE.Group();
+    loadGroup.position.set(0.15, 0.95, 0.15);
+    const servoBody = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.85, 0.45), matPcbDark);
+    loadGroup.add(servoBody);
+    const servoLabel = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.42, 0.36), matServoRed);
+    servoLabel.position.y = 0.05;
+    loadGroup.add(servoLabel);
+    const servoBracket = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.12, 0.55), matAluminum);
+    servoBracket.position.y = -0.45;
+    loadGroup.add(servoBracket);
+    rigGroup.add(loadGroup);
+    registerPart('load', loadGroup, new THREE.Vector3(0, 0.45, 0.55));
+
+    // 5. MPU6050 / ADXL345 Accelerometer Module (mounted on Pillar 1 near motor)
+    const accelGroup = new THREE.Group();
+    accelGroup.position.set(-2.2, 1.92, -0.2);
+    const accelPcb = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), matPcbBlue);
+    accelGroup.add(accelPcb);
+    const accelChip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.16), matPcbDark);
+    accelChip.position.y = 0.05;
+    accelGroup.add(accelChip);
+    rigGroup.add(accelGroup);
+    registerPart('accel', accelGroup, new THREE.Vector3(-0.3, 0.85, 0));
+
+    // 6. DS18B20 Temperature Sensor Probe (on motor stator)
+    const tempGroup = new THREE.Group();
+    tempGroup.position.set(-2.95, 1.85, -0.2);
+    const tempProbe = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.38, 12), matCopper);
+    tempGroup.add(tempProbe);
+    const tempHead = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), matPcbDark);
+    tempHead.position.y = 0.2;
+    tempGroup.add(tempHead);
+    rigGroup.add(tempGroup);
+    registerPart('temp', tempGroup, new THREE.Vector3(-0.7, 0.9, 0));
+
+    // 7. Breadboard + ESP32 Microcontroller (Front Right on baseplate)
+    const espGroup = new THREE.Group();
+    espGroup.position.set(1.5, 0.1, 0.82);
+    const breadboard = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.16, 1.05), matBreadboard);
+    espGroup.add(breadboard);
+    const espPcb = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.08, 0.58), matPcbDark);
+    espPcb.position.set(-0.55, 0.12, 0);
+    espGroup.add(espPcb);
+    const espShield = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.07, 0.42), matAluminum);
+    espShield.position.set(-0.72, 0.18, 0);
+    espGroup.add(espShield);
+    rigGroup.add(espGroup);
+    registerPart('esp32', espGroup, new THREE.Vector3(0.45, 0.35, 0.65));
+
+    // 8. Live Dynamic OLED Display + 4 Alert LEDs
+    const oledGroup = new THREE.Group();
+    oledGroup.position.set(2.35, 0.22, 0.82);
+
+    // Dynamic CanvasTexture for SSD1306 OLED
+    const oledCanvas = document.createElement('canvas');
+    oledCanvas.width = 256;
+    oledCanvas.height = 128;
+    const oledCtx = oledCanvas.getContext('2d');
+    const oledTexture = new THREE.CanvasTexture(oledCanvas);
+
+    const oledBezel = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.48, 0.1), matPcbDark);
+    oledBezel.position.set(0.05, 0.32, 0.15);
+    oledBezel.rotation.x = -0.35;
+    oledGroup.add(oledBezel);
+
+    const oledScreen = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.66, 0.35),
+      new THREE.MeshBasicMaterial({ map: oledTexture })
+    );
+    oledScreen.position.set(0.05, 0.33, 0.205);
+    oledScreen.rotation.x = -0.35;
+    oledGroup.add(oledScreen);
+
+    // 4 Alert LEDs (Green, Blue, Yellow, Red)
+    const ledDefs = [
+      { key: 'green', color: 0x22c55e, x: -0.25 },
+      { key: 'blue', color: 0x3b82f6, x: -0.08 },
+      { key: 'yellow', color: 0xeab308, x: 0.09 },
+      { key: 'red', color: 0xef4444, x: 0.26 },
+    ];
+    const ledMeshes = {};
+    ledDefs.forEach((ld) => {
+      const mat = new THREE.MeshStandardMaterial({
+        color: ld.color,
+        emissive: ld.color,
+        emissiveIntensity: 0.15,
+        roughness: 0.25,
+      });
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 14), mat);
+      bulb.position.set(ld.x, 0.1, -0.28);
+      oledGroup.add(bulb);
+      ledMeshes[ld.key] = mat;
+    });
+
+    rigGroup.add(oledGroup);
+    registerPart('oled', oledGroup, new THREE.Vector3(0.85, 0.55, 0.75));
+
+    // =========================================================================
+    // 4. CUSTOM ORBIT / ZOOM / RAYCAST CAMERA CONTROLS
+    // =========================================================================
+    const camState = {
+      theta: 0.55,
+      phi: 1.05,
+      radius: 8.8,
+      targetTheta: 0.55,
+      targetPhi: 1.05,
+      targetRadius: 8.8,
+      targetLook: new THREE.Vector3(0, 0.75, 0.1),
+      isDragging: false,
+      dragMoved: false,
+      lastX: 0,
+      lastY: 0,
+    };
+
+    function updateCameraPosition() {
+      camState.theta += (camState.targetTheta - camState.theta) * 0.14;
+      camState.phi += (camState.targetPhi - camState.phi) * 0.14;
+      camState.radius += (camState.targetRadius - camState.radius) * 0.14;
+      const sinPhi = Math.sin(camState.phi);
+      camera.position.set(
+        camState.targetLook.x + camState.radius * sinPhi * Math.sin(camState.theta),
+        camState.targetLook.y + camState.radius * Math.cos(camState.phi),
+        camState.targetLook.z + camState.radius * sinPhi * Math.cos(camState.theta)
+      );
+      camera.lookAt(camState.targetLook);
+    }
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      camState.isDragging = true;
+      camState.dragMoved = false;
+      camState.lastX = e.clientX;
+      camState.lastY = e.clientY;
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!camState.isDragging) return;
+      const dx = e.clientX - camState.lastX;
+      const dy = e.clientY - camState.lastY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) camState.dragMoved = true;
+      camState.lastX = e.clientX;
+      camState.lastY = e.clientY;
+      camState.targetTheta -= dx * 0.008;
+      camState.targetPhi = Math.max(0.25, Math.min(1.48, camState.targetPhi - dy * 0.008));
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      if (camState.isDragging && !camState.dragMoved) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+          pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.setFromCamera(pointer, camera);
+          const hits = raycaster.intersectObjects(clickableObjects, false);
+          if (hits.length > 0 && hits[0].object.userData.partId) {
+            selectPart(hits[0].object.userData.partId);
+          }
+        }
+      }
+      camState.isDragging = false;
+    });
+
+    renderer.domElement.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      camState.targetRadius = Math.max(4.5, Math.min(15.0, camState.targetRadius + e.deltaY * 0.006));
+    }, { passive: false });
+
+    function resize3D() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+    window.addEventListener('resize', resize3D);
+
+    // =========================================================================
+    // 5. CHART.JS TELEMETRY & FFT CHARTS
+    // =========================================================================
+    const MAX_PTS = 50;
+    const labelsTime = Array.from({ length: MAX_PTS }, (_, i) => `${i}`);
+
+    const chartVib = new Chart(document.getElementById('chartVib').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: labelsTime,
+        datasets: [
+          { label: 'X-Axis (g)', data: Array(MAX_PTS).fill(0), borderColor: '#14b8a6', borderWidth: 1.8, pointRadius: 0, tension: 0.25 },
+          { label: 'Y-Axis (g)', data: Array(MAX_PTS).fill(0), borderColor: '#38bdf8', borderWidth: 1.5, pointRadius: 0, tension: 0.25 },
+          { label: 'Z-Axis (g)', data: Array(MAX_PTS).fill(0), borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 0, tension: 0.25 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10, font: { size: 10 } } } },
+        scales: {
+          x: { display: false },
+          y: { min: -2.2, max: 2.2, grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } },
+        },
+      },
+    });
+
+    const chartTemp = new Chart(document.getElementById('chartTemp').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: labelsTime,
+        datasets: [
+          { label: 'Stator °C', data: Array(MAX_PTS).fill(35), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.12)', fill: true, borderWidth: 2, pointRadius: 0, tension: 0.3 },
+          { label: 'Critical 65°C', data: Array(MAX_PTS).fill(65), borderColor: '#ef4444', borderDash: [4, 4], borderWidth: 1.2, pointRadius: 0 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10, font: { size: 10 } } } },
+        scales: {
+          x: { display: false },
+          y: { min: 20, max: 85, grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } },
+        },
+      },
+    });
+
+    const fftBins = Array.from({ length: 40 }, (_, i) => `${(i + 1) * 5} Hz`);
+    const chartFft = new Chart(document.getElementById('chartFft').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: fftBins,
+        datasets: [
+          { label: 'Amplitude (mm/s)', data: Array(40).fill(0.1), backgroundColor: '#22d3ee', borderRadius: 3 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 8 } },
+          y: { min: 0, max: 6.5, grid: { color: '#1e293b' }, ticks: { color: '#64748b', font: { size: 10 } } },
+        },
+      },
+    });
+
+    // =========================================================================
+    // 6. UI HELPERS & INTERACTIVE EVENT WIRING
+    // =========================================================================
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.remove('hidden');
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => t.classList.add('hidden'), 2800);
+    }
+
+    function selectPart(partId) {
+      const info = PART_INFO[partId];
+      if (!info) return;
+      state.selectedPart = partId;
+      document.getElementById('inspCategory').textContent = info.category;
+      document.getElementById('inspTitle').textContent = info.title;
+      document.getElementById('inspDesc').textContent = info.desc;
+      document.getElementById('inspLive').textContent = info.getLive();
+      document.getElementById('inspPotential').textContent = info.potential;
+      document.getElementById('inspectorCard').classList.remove('hidden');
+
+      document.querySelectorAll('.part-pill').forEach((btn) => {
+        const active = btn.dataset.part === partId;
+        btn.classList.toggle('border-teal-500', active);
+        btn.classList.toggle('text-teal-300', active);
+        btn.classList.toggle('bg-teal-500/15', active);
+      });
+    }
+
+    document.getElementById('btnCloseInspector').addEventListener('click', () => {
+      state.selectedPart = null;
+      document.getElementById('inspectorCard').classList.add('hidden');
+      document.querySelectorAll('.part-pill').forEach((btn) => {
+        btn.classList.remove('border-teal-500', 'text-teal-300', 'bg-teal-500/15');
+      });
+    });
+
+    document.querySelectorAll('.part-pill').forEach((btn) => {
+      btn.addEventListener('click', () => selectPart(btn.dataset.part));
+    });
+
+    function setMode(newMode) {
+      state.mode = newMode;
+      const isPot = newMode === 'potential';
+      const btnCur = document.getElementById('btnModeCurrent');
+      const btnPot = document.getElementById('btnModePotential');
+
+      if (isPot) {
+        btnPot.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-amber-500 text-slate-950 shadow flex items-center gap-1.5';
+        btnCur.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-400 hover:text-white';
+        document.getElementById('modeSubtitle').textContent = 'Industry 4.0 Digital Twin · Edge FFT, TinyML & Auto-Protection';
+        document.getElementById('potentialControlsWrap').classList.remove('hidden');
+        document.getElementById('fftLockNotice').classList.add('hidden');
+        document.getElementById('kpiFourthLabel').textContent = 'Health / RUL';
+        coolingFanGroup.visible = state.activeCooling;
+        showToast('Highest Potential Mode: Edge FFT, TinyML & Auto-Protection active');
+      } else {
+        btnCur.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-teal-600 text-white shadow';
+        btnPot.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-400 hover:text-white flex items-center gap-1.5';
+        document.getElementById('modeSubtitle').textContent = '12V DC Test Rig · Local OLED & LED Thresholds';
+        document.getElementById('potentialControlsWrap').classList.add('hidden');
+        document.getElementById('fftLockNotice').classList.remove('hidden');
+        document.getElementById('kpiFourthLabel').textContent = 'Threshold State';
+        state.relayTripped = false;
+        state.criticalTimer = 0;
+        document.getElementById('relayBanner').classList.add('hidden');
+        coolingFanGroup.visible = false;
+        showToast('Bench Prototype Mode: Standard local threshold monitoring');
+      }
+    }
+
+    document.getElementById('btnModeCurrent').addEventListener('click', () => setMode('current'));
+    document.getElementById('btnModePotential').addEventListener('click', () => setMode('potential'));
+    document.getElementById('btnUnlockPotential').addEventListener('click', () => setMode('potential'));
+
+    // Fault Preset Buttons
+    document.querySelectorAll('.fault-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.fault = btn.dataset.fault;
+        state.relayTripped = false;
+        state.criticalTimer = 0;
+        document.getElementById('relayBanner').classList.add('hidden');
+        document.querySelectorAll('.fault-btn').forEach((b) => {
+          const isSel = b.dataset.fault === state.fault;
+          b.className = isSel
+            ? 'fault-btn px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-teal-600/20 border-teal-500 text-teal-300'
+            : 'fault-btn px-2.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700';
+        });
+      });
+    });
+
+    // Sliders
+    document.getElementById('sliderRpm').addEventListener('input', (e) => {
+      state.rpm = Number(e.target.value);
+      document.getElementById('valRpm').textContent = `${state.rpm.toLocaleString()} RPM`;
+      document.getElementById('valFreq1x').textContent = `${(state.rpm / 60).toFixed(1)} Hz`;
+    });
+    document.getElementById('sliderLoad').addEventListener('input', (e) => {
+      state.load = Number(e.target.value);
+      document.getElementById('valLoad').textContent = `${state.load}%`;
+    });
+    document.getElementById('sliderAmbient').addEventListener('input', (e) => {
+      state.ambient = Number(e.target.value);
+      document.getElementById('valAmbient').textContent = `${state.ambient}°C`;
+    });
+
+    // Toggles & Camera
+    document.getElementById('btnExplode').addEventListener('click', (e) => {
+      state.exploded = !state.exploded;
+      e.target.classList.toggle('bg-teal-600', state.exploded);
+      e.target.classList.toggle('text-white', state.exploded);
+    });
+    document.getElementById('btnResetCam').addEventListener('click', () => {
+      camState.targetTheta = 0.55;
+      camState.targetPhi = 1.05;
+      camState.targetRadius = 8.8;
+    });
+    document.getElementById('chkAutoProtect').addEventListener('change', (e) => {
+      state.autoProtect = e.target.checked;
+      if (!state.autoProtect) {
+        state.relayTripped = false;
+        document.getElementById('relayBanner').classList.add('hidden');
+      }
+    });
+    document.getElementById('chkActiveCooling').addEventListener('change', (e) => {
+      state.activeCooling = e.target.checked;
+      coolingFanGroup.visible = state.mode === 'potential' && state.activeCooling;
+    });
+    document.getElementById('btnResetRelay').addEventListener('click', () => {
+      state.relayTripped = false;
+      state.criticalTimer = 0;
+      document.getElementById('relayBanner').classList.add('hidden');
+      showToast('Protection relay reset — motor restarted');
+    });
+
+    document.getElementById('btnBuzzerToggle').addEventListener('click', () => {
+      state.buzzerEnabled = !state.buzzerEnabled;
+      document.getElementById('iconBuzzerOff').classList.toggle('hidden', state.buzzerEnabled);
+      document.getElementById('iconBuzzerOn').classList.toggle('hidden', !state.buzzerEnabled);
+      showToast(state.buzzerEnabled ? 'Alert buzzer audio enabled' : 'Alert buzzer muted');
+    });
+
+    // Tabs
+    document.querySelectorAll('.panel-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.tab;
+        document.querySelectorAll('.panel-tab').forEach((t) => {
+          const active = t.dataset.tab === target;
+          t.classList.toggle('border-teal-400', active);
+          t.classList.toggle('text-white', active);
+          t.classList.toggle('bg-[#0d1321]', active);
+          t.classList.toggle('border-transparent', !active);
+          t.classList.toggle('text-slate-400', !active);
+        });
+        document.querySelectorAll('.tab-content').forEach((c) => {
+          c.classList.toggle('hidden', c.id !== `tab-${target}`);
+        });
+      });
+    });
+
+    // CSV Export
+    document.getElementById('btnExportCsv').addEventListener('click', () => {
+      const header = 'Timestamp,Mode,Fault_Scenario,RPM,Load_Pct,Vibration_RMS_mms,Peak_Accel_g,Temp_C,Status\n';
+      const rows = state.csvLog.map((r) => r.join(',')).join('\n');
+      const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `motor_telemetry_${state.mode}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`Exported ${state.csvLog.length} telemetry samples to CSV`);
+    });
+
+    // =========================================================================
+    // 7. SIMULATION & RENDER LOOP
+    // =========================================================================
+    let lastFrameTime = performance.now();
+    let telemetryAccumulator = 0;
+
+    function updateOledTexture() {
+      oledCtx.fillStyle = '#020617';
+      oledCtx.fillRect(0, 0, 256, 128);
+      oledCtx.strokeStyle = '#0ea5e9';
+      oledCtx.lineWidth = 3;
+      oledCtx.strokeRect(4, 4, 248, 120);
+
+      oledCtx.fillStyle = '#38bdf8';
+      oledCtx.font = 'bold 16px monospace';
+      oledCtx.fillText(state.mode === 'potential' ? 'TWIN: INDUSTRY 4.0' : 'EDI-1 BENCH MONITOR', 14, 26);
+
+      oledCtx.fillStyle = '#f8fafc';
+      oledCtx.font = '15px monospace';
+      const effRpm = state.relayTripped ? 0 : state.rpm;
+      oledCtx.fillText(`RPM: ${effRpm}   ${state.temp.toFixed(1)}C`, 14, 54);
+      oledCtx.fillText(`VIB: ${state.vibRms.toFixed(2)} mm/s`, 14, 78);
+
+      oledCtx.fillStyle = state.status === 'CRITICAL' ? '#ef4444' : state.status === 'WARNING' ? '#facc15' : '#22c55e';
+      oledCtx.font = 'bold 18px monospace';
+      oledCtx.fillText(`STATUS: ${state.relayTripped ? 'TRIPPED' : state.status}`, 14, 108);
+      oledTexture.needsUpdate = true;
+    }
+
+    function stepTelemetry(dt) {
+      const prof = FAULT_PROFILES[state.fault];
+      const effRpm = state.relayTripped ? 0 : state.rpm;
+      const speedFactor = effRpm / 1500;
+      const loadFactor = 0.7 + (state.load / 100) * 0.75;
+
+      // Target vibration & temperature
+      const targetVib = effRpm === 0 ? 0.05 : 1.15 * prof.vibMult * Math.max(0.25, speedFactor) * loadFactor;
+      state.vibRms += (targetVib - state.vibRms) * 0.15 + (Math.random() - 0.5) * 0.08;
+      state.vibRms = Math.max(0.02, state.vibRms);
+      state.peakG = state.vibRms * 0.21 + (Math.random() * 0.04);
+
+      const coolingReduction = (state.mode === 'potential' && state.activeCooling && effRpm > 0) ? 10.5 : 0;
+      const targetTemp = state.ambient + (effRpm === 0 ? 1.5 : prof.tempRise * loadFactor * Math.max(0.4, speedFactor)) - coolingReduction;
+      state.temp += (Math.max(state.ambient, targetTemp) - state.temp) * 0.06;
+
+      // Threshold Evaluation
+      if (state.vibRms >= 4.5 || state.temp >= 65) {
+        state.status = 'CRITICAL';
+      } else if (state.vibRms >= 2.8 || state.temp >= 55) {
+        state.status = 'WARNING';
+      } else {
+        state.status = 'NORMAL';
+      }
+
+      // Highest Potential Auto-Protection Relay
+      if (state.mode === 'potential' && state.autoProtect && state.status === 'CRITICAL' && !state.relayTripped) {
+        state.criticalTimer += dt;
+        if (state.criticalTimer >= 2.5) {
+          state.relayTripped = true;
+          document.getElementById('relayBanner').classList.remove('hidden');
+        }
+      } else if (state.status !== 'CRITICAL') {
+        state.criticalTimer = 0;
+      }
+
+      if (state.status === 'CRITICAL' && !state.relayTripped) {
+        playBuzzerBeep(920, 0.09);
+      }
+
+      // Health Score
+      const vibPenalty = Math.min(55, Math.max(0, (state.vibRms - 1.2) * 12));
+      const tempPenalty = Math.min(40, Math.max(0, (state.temp - 40) * 1.4));
+      state.healthScore = Math.max(8, Math.round(100 - vibPenalty - tempPenalty));
+
+      // Update KPI Cards
+      document.getElementById('kpiVib').innerHTML = `${state.vibRms.toFixed(2)} <span class="text-xs font-normal text-slate-400">mm/s</span>`;
+      document.getElementById('kpiTemp').innerHTML = `${state.temp.toFixed(1)} <span class="text-xs font-normal text-slate-400">°C</span>`;
+      document.getElementById('kpiPeakG').innerHTML = `${state.peakG.toFixed(2)} <span class="text-xs font-normal text-slate-400">g</span>`;
+
+      const vibSub = document.getElementById('kpiVibSub');
+      vibSub.textContent = state.vibRms >= 4.5 ? 'ISO Zone D (Critical)' : state.vibRms >= 2.8 ? 'ISO Zone C (Warning)' : 'ISO Zone A (Good)';
+      vibSub.className = `text-[10px] mt-0.5 ${state.vibRms >= 4.5 ? 'text-red-400' : state.vibRms >= 2.8 ? 'text-amber-400' : 'text-emerald-400'}`;
+
+      const tempSub = document.getElementById('kpiTempSub');
+      tempSub.textContent = state.temp >= 65 ? 'Breach (>65°C)' : state.temp >= 55 ? 'Elevated (>55°C)' : 'Limit: 65.0°C';
+      tempSub.className = `text-[10px] mt-0.5 ${state.temp >= 65 ? 'text-red-400' : state.temp >= 55 ? 'text-amber-400' : 'text-emerald-400'}`;
+
+      const k4Val = document.getElementById('kpiFourthVal');
+      const k4Sub = document.getElementById('kpiFourthSub');
+      if (state.mode === 'potential') {
+        k4Val.textContent = `${state.healthScore}%`;
+        k4Val.className = `text-lg font-bold mono mt-0.5 ${state.healthScore < 50 ? 'text-red-400' : state.healthScore < 75 ? 'text-amber-400' : 'text-emerald-400'}`;
+        k4Sub.textContent = `RUL: ~${Math.round(prof.rulBase * (state.healthScore / 100))} hrs`;
+      } else {
+        k4Val.textContent = state.status === 'NORMAL' ? 'OK' : state.status === 'WARNING' ? 'WARN' : 'ALERT';
+        k4Val.className = `text-lg font-bold mono mt-0.5 ${state.status === 'CRITICAL' ? 'text-red-400' : state.status === 'WARNING' ? 'text-amber-400' : 'text-emerald-400'}`;
+        k4Sub.textContent = state.status === 'CRITICAL' ? 'Red LED + Buzzer' : state.status === 'WARNING' ? 'Yellow LED Active' : 'Green LED Active';
+      }
+
+      // Status Badge
+      const dot = document.getElementById('statusDot');
+      const badge = document.getElementById('statusBadgeText');
+      if (state.relayTripped) {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 pulse-fast';
+        badge.textContent = 'SAFETY CUTOFF TRIPPED';
+        badge.className = 'text-xs font-semibold tracking-wide uppercase text-red-400';
+      } else if (state.status === 'CRITICAL') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 pulse-fast';
+        badge.textContent = 'CRITICAL THRESHOLD BREACH';
+        badge.className = 'text-xs font-semibold tracking-wide uppercase text-red-400';
+      } else if (state.status === 'WARNING') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+        badge.textContent = 'WARNING THRESHOLD';
+        badge.className = 'text-xs font-semibold tracking-wide uppercase text-amber-300';
+      } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]';
+        badge.textContent = 'NORMAL OPERATION';
+        badge.className = 'text-xs font-semibold tracking-wide uppercase text-emerald-300';
+      }
+
+      // Physical & UI LEDs
+      const isOk = state.status === 'NORMAL' && !state.relayTripped;
+      const isWarn = state.status === 'WARNING' && !state.relayTripped;
+      const isCrit = state.status === 'CRITICAL' || state.relayTripped;
+      const isIoT = state.mode === 'potential';
+
+      ledMeshes.green.emissiveIntensity = isOk ? 2.0 : 0.08;
+      ledMeshes.blue.emissiveIntensity = isIoT ? 1.8 : 0.08;
+      ledMeshes.yellow.emissiveIntensity = isWarn ? 2.2 : 0.08;
+      ledMeshes.red.emissiveIntensity = isCrit ? 2.6 : 0.08;
+
+      document.getElementById('ledGreen').className = `w-3 h-3 rounded-full ${isOk ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-700'}`;
+      document.getElementById('ledBlue').className = `w-3 h-3 rounded-full ${isIoT ? 'bg-blue-400 shadow-[0_0_8px_#60a5fa]' : 'bg-slate-700'}`;
+      document.getElementById('ledYellow').className = `w-3 h-3 rounded-full ${isWarn ? 'bg-yellow-400 shadow-[0_0_8px_#facc15]' : 'bg-slate-700'}`;
+      document.getElementById('ledRed').className = `w-3 h-3 rounded-full ${isCrit ? 'bg-red-500 shadow-[0_0_10px_#ef4444] pulse-fast' : 'bg-slate-700'}`;
+
+      // Update Waveform Chart
+      const t = state.simTime;
+      const f1 = Math.max(1, effRpm / 60);
+      const amp = state.peakG;
+      const xVal = effRpm === 0 ? (Math.random() - 0.5) * 0.02 : amp * Math.sin(t * 14) + (Math.random() - 0.5) * 0.08 * prof.noise;
+      const yVal = effRpm === 0 ? (Math.random() - 0.5) * 0.02 : amp * 0.85 * Math.cos(t * 14 * (state.fault === 'misalignment' ? 2 : 1)) + (Math.random() - 0.5) * 0.08 * prof.noise;
+      const zVal = effRpm === 0 ? (Math.random() - 0.5) * 0.02 : amp * 0.55 * Math.sin(t * 21) + (Math.random() - 0.5) * 0.1 * prof.noise;
+
+      chartVib.data.datasets[0].data.push(xVal); chartVib.data.datasets[0].data.shift();
+      chartVib.data.datasets[1].data.push(yVal); chartVib.data.datasets[1].data.shift();
+      chartVib.data.datasets[2].data.push(zVal); chartVib.data.datasets[2].data.shift();
+      chartVib.update('none');
+
+      chartTemp.data.datasets[0].data.push(state.temp); chartTemp.data.datasets[0].data.shift();
+      chartTemp.update('none');
+
+      // Update FFT Chart
+      const f1Bin = Math.min(39, Math.max(0, Math.round(f1 / 5) - 1));
+      const f2Bin = Math.min(39, Math.max(0, Math.round((f1 * 2) / 5) - 1));
+      const f3Bin = Math.min(39, Math.max(0, Math.round((f1 * 3) / 5) - 1));
+      const fftData = Array.from({ length: 40 }, (_, idx) => {
+        if (effRpm === 0) return 0.05;
+        let v = 0.12 * prof.noise * (0.6 + Math.random() * 0.8);
+        if (idx === f1Bin) v += prof.h1 * speedFactor;
+        if (idx === f2Bin) v += prof.h2 * speedFactor;
+        if (idx === f3Bin) v += prof.h3 * speedFactor;
+        if (state.fault === 'bearing' && idx > 18) v += 0.7 + Math.random() * 1.1;
+        return Math.min(6.2, v);
+      });
+      chartFft.data.datasets[0].data = fftData;
+      chartFft.data.datasets[0].backgroundColor = fftData.map((v) => (v > 3.5 ? '#ef4444' : v > 2.0 ? '#f59e0b' : '#22d3ee'));
+      chartFft.update('none');
+      document.getElementById('fftPeakLabel').textContent = `1X Peak: ${f1.toFixed(1)} Hz`;
+
+      // Diagnostics Text
+      document.getElementById('diagConfidence').textContent = state.fault === 'normal' ? `${state.healthScore}% Healthy` : `94.6% ${prof.label}`;
+      document.getElementById('diagConfidence').className = `text-xs mono font-bold ${state.fault === 'normal' ? 'text-emerald-400' : 'text-amber-400'}`;
+      document.getElementById('diagSummary').textContent = prof.diag;
+      document.getElementById('diagRul').textContent = `${Math.round(prof.rulBase * (state.healthScore / 100))} hrs`;
+      document.getElementById('diagAction').textContent = prof.action;
+
+      // Update Inspector live text if open
+      if (state.selectedPart && PART_INFO[state.selectedPart]) {
+        document.getElementById('inspLive').textContent = PART_INFO[state.selectedPart].getLive();
+      }
+
+      // Append CSV log (cap at 500 rows)
+      state.csvLog.push([
+        new Date().toISOString(),
+        state.mode,
+        state.fault,
+        effRpm,
+        state.load,
+        state.vibRms.toFixed(2),
+        state.peakG.toFixed(2),
+        state.temp.toFixed(1),
+        state.status,
+      ]);
+      if (state.csvLog.length > 500) state.csvLog.shift();
+
+      updateOledTexture();
+    }
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+      state.simTime += dt;
+
+      // Rotate shaft & fan
+      const effRpm = state.relayTripped ? 0 : state.rpm;
+      const radPerSec = (effRpm / 60) * Math.PI * 2;
+      state.shaftAngle += radPerSec * dt * 0.25; // visual speed scaling
+      shaftGroup.rotation.x = state.shaftAngle;
+
+      if (coolingFanGroup.visible && effRpm > 0) {
+        fanBlades.rotation.x -= dt * 14;
+      }
+
+      // 3D Vibration wobble & Thermal glow
+      const wobble = effRpm === 0 ? 0 : Math.min(0.06, state.vibRms * 0.008);
+      rigGroup.position.x = Math.sin(state.simTime * 55) * wobble;
+      rigGroup.position.y = Math.cos(state.simTime * 48) * wobble * 0.6;
+
+      const heatRatio = Math.min(1, Math.max(0, (state.temp - 42) / 35));
+      matMotorBody.emissive.setRGB(heatRatio * 0.75, heatRatio * 0.14, 0);
+
+      // Smooth Exploded View Interpolation
+      const expFactor = state.exploded ? 1 : 0;
+      explodeTargets.forEach((item) => {
+        const targetPos = item.base.clone().addScaledVector(item.offset, expFactor);
+        item.obj.position.lerp(targetPos, 0.12);
+      });
+
+      // Telemetry step at ~10 Hz
+      telemetryAccumulator += dt;
+      if (telemetryAccumulator >= 0.1) {
+        stepTelemetry(telemetryAccumulator);
+        telemetryAccumulator = 0;
+      }
+
+      updateCameraPosition();
+      renderer.render(scene, camera);
+    }
+
+    // Initialize
+    updateOledTexture();
+    resize3D();
+    requestAnimationFrame(animate);
+  })();
+  </script>
+</body>
+</html>
